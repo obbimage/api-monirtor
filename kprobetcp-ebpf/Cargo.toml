@@ -1,0 +1,16 @@
+[package]
+name = "kprobetcp-ebpf"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+aya-ebpf = { git = "https://github.com/aya-rs/aya" }
+aya-log-ebpf = { git = "https://github.com/aya-rs/aya" }
+kprobetcp-common = { path = "../kprobetcp-common" }
+
+[build-dependencies]
+which = { version = "8.0.0", default-features = false, features = ["real-sys"] }
+
+[[bin]]
+name = "kprobetcp"
+path = "src/main.rs"
