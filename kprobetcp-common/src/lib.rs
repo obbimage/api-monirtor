@@ -9,7 +9,16 @@ pub enum HttpMethod {
     PUT = 3,
     DELETE = 4,
     PATCH = 5,
+    // HTTP/2 frame markers (high nibble = 0x2_)
+    H2_HEADERS = 0x21, // nghttp2 HEADERS frame
+    H2_DATA    = 0x20, // nghttp2 DATA frame
 }
+
+// HTTP/2 frame types
+pub const HTTP2_FRAME_DATA:       u8 = 0x00;
+pub const HTTP2_FRAME_HEADERS:    u8 = 0x01;
+pub const HTTP2_FRAME_SETTINGS:   u8 = 0x04;
+pub const HTTP2_FRAME_GOAWAY:     u8 = 0x07;
 
 impl TryFrom<u8> for HttpMethod {
     type Error = ();

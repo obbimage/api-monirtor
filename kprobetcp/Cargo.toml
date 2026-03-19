@@ -23,6 +23,7 @@ tokio = { version = "1.25", features = [
   "signal",
 ] }
 serde_json = "1"
+hpack = "0.3"
 
 
 [build-dependencies]
