@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse
+    restart: always
+    ports:
+      - "8123:8123"   # HTTP interface
+      - "9000:9000"   # Native client
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: admin
+      CLICKHOUSE_PASSWORD: admin123
+
+  clickhouse-client:
+    image: clickhouse/clickhouse-client:latest
+    container_name: clickhouse-client
+    depends_on:
+      - clickhouse
+    entrypoint: ["sleep", "infinity"]
+
+  tabix:
+    image: spoonest/clickhouse-tabix-web-client
+    container_name: tabix
+    restart: always
+    ports:
+      - "8080:80"
+    depends_on:
+      - clickhouse
+
+volumes:
+  clickhouse_data:
+  clickhouse_logs:

@@ -24,7 +24,7 @@ use aya_ebpf::{bpf_printk, helpers::{
 }, macros::{kprobe, map, uprobe, uretprobe}, maps::{HashMap, PerCpuArray, RingBuf}, programs::{ProbeContext, RetProbeContext}, EbpfContext};
 
 use aya_log_ebpf::info;
-use kprobetcp_common::{HttpEvent, HttpMethod, HTTP2_FRAME_HEADERS, HTTP2_FRAME_DATA};
+use kprobetcp_common::{Event, HttpMethod, HTTP2_FRAME_HEADERS, HTTP2_FRAME_DATA};
 
 #[derive(Clone, Copy)]
 pub struct SslReadArgs {
@@ -101,13 +101,13 @@ fn try_ssl_write(ctx: ProbeContext) -> Result<u32, i64> {
         return Ok(0);
     };
 
-    if let Some(mut entry) = RING_BUF_REQ.reserve::<HttpEvent>(0) {
+    if let Some(mut entry) = RING_BUF_REQ.reserve::<Event>(0) {
         let event = unsafe { &mut *entry.as_mut_ptr() };
-        event.is_request = 1;
-        event.dport      = 443;
-        event.sport      = 0;
-        event.saddr      = 0;
-        event.daddr      = 0;
+        // event.is_request = 1;
+        event.des_port = 443;
+        event.src_port = 0;
+        event.src_addr = 0;
+        event.des_ddr = 0;
         event.timestamp  = unsafe { aya_ebpf::helpers::bpf_ktime_get_ns() };
         event._pad       = [0u8; 3];
         event.method     = method;
@@ -176,14 +176,14 @@ fn try_ssl_read_ret(ctx: RetProbeContext) -> Result<u32, i64> {
 
     unsafe { bpf_probe_read_user_buf(buf_ptr, &mut buf[..read_len])? };
 
-    if let Some(mut entry) = RING_BUF_RES.reserve::<HttpEvent>(0) {
+    if let Some(mut entry) = RING_BUF_RES.reserve::<Event>(0) {
         let event = unsafe { &mut *entry.as_mut_ptr() };
-        event.is_request = 0;
+        // event.is_request = 0;
         event.method     = HttpMethod::UNKNOWN as u8;
-        event.sport      = 443;
-        event.dport      = 0;
-        event.saddr      = 0;
-        event.daddr      = 0;
+        event.src_port = 443;
+        event.des_port = 0;
+        event.src_addr = 0;
+        event.des_ddr = 0;
         event.timestamp  = unsafe { aya_ebpf::helpers::bpf_ktime_get_ns() };
         event._pad       = [0u8; 3];
 
@@ -294,14 +294,14 @@ fn try_tcp_sendmsg(ctx: ProbeContext) -> Result<u32, i64> {
         _    => return Ok(0),
     };
 
-    if let Some(mut entry) = RING_BUF_REQ.reserve::<HttpEvent>(0) {
+    if let Some(mut entry) = RING_BUF_REQ.reserve::<Event>(0) {
         let event = unsafe { &mut *entry.as_mut_ptr() };
         event.method     = method;
-        event.saddr      = src_addr;
-        event.daddr      = dest_addr;
-        event.sport      = src_port;
-        event.dport      = dest_port;
-        event.is_request = 1;
+        event.src_addr = src_addr;
+        event.des_ddr = dest_addr;
+        event.src_port = src_port;
+        event.des_port = dest_port;
+        // event.is_request = 1;
         event._pad       = [0u8; 3];
         event.timestamp  = unsafe { aya_ebpf::helpers::bpf_ktime_get_ns() };
 

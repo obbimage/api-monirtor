@@ -1,10 +1,12 @@
+mod db;
+
 use aya::maps::RingBuf;
 use aya::programs::{KProbe, UProbe};
 use aya_log::EbpfLogger;
 use clap::Parser;
 use hpack::Decoder;
 use httparse::Status;
-use kprobetcp_common::{HttpEvent, HttpMethod};
+use kprobetcp_common::{Event, HttpMethod};
 use log::{info, warn};
 use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
@@ -12,6 +14,8 @@ use std::mem;
 use std::os::unix::fs::MetadataExt;
 use tokio::io::unix::AsyncFd;
 use tokio::signal;
+use db::create_client;
+use crate::db::init_db;
 
 // ── Method byte scheme ────────────────────────────────────────────────────────
 // 0x01..=0x05  HTTP/1.1 methods (GET/POST/PUT/DELETE/PATCH)
@@ -218,7 +222,7 @@ fn parse_h2_frame(data: &[u8]) -> Option<H2Frame<'_>> {
 }
 
 // ── HTTP/2 event handler ──────────────────────────────────────────────────────
-fn handle_h2_event(event: &HttpEvent, source: &str, debug: bool) {
+fn handle_h2_event(event: &Event, source: &str, debug: bool) {
     let len = effective_len(&event.data);
     if len == 0 { return; }
 
@@ -299,7 +303,7 @@ fn handle_h2_event(event: &HttpEvent, source: &str, debug: bool) {
 
                         println!("  {} {}://{}{}", method, scheme, authority, path);
                         for (k, v) in &others {
-                            println!("  {}: {}", k, v);
+                            println!("  {}::: {}", k, v);
                         }
                     }
                     Err(e) => {
@@ -396,7 +400,7 @@ fn handle_h2_event(event: &HttpEvent, source: &str, debug: bool) {
 }
 
 // ── HTTP/1.1 request handler ──────────────────────────────────────────────────
-fn handle_h1_request(event: &HttpEvent, source: &str, debug: bool) {
+fn handle_h1_request(event: &Event, source: &str, debug: bool) {
     let len = effective_len(&event.data);
     if len == 0 { return; }
 
@@ -425,10 +429,10 @@ fn handle_h1_request(event: &HttpEvent, source: &str, debug: bool) {
             }
 
             // Địa chỉ IP nếu có
-            let addr_info = if event.saddr != 0 && event.daddr != 0 {
+            let addr_info = if event.src_addr != 0 && event.des_ddr != 0 {
                 format!(" [{}:{} → {}:{}]",
-                        fmt_ipv4(event.saddr), event.sport,
-                        fmt_ipv4(event.daddr), event.dport)
+                        fmt_ipv4(event.src_addr), event.src_port,
+                        fmt_ipv4(event.des_ddr), event.des_port)
             } else {
                 String::new()
             };
@@ -483,7 +487,7 @@ fn handle_h1_request(event: &HttpEvent, source: &str, debug: bool) {
 }
 
 // ── HTTP response handler (HTTP/1.1 và HTTP/2 cleartext) ─────────────────────
-fn handle_response(event: &HttpEvent, source: &str, debug: bool) {
+fn handle_response(event: &Event, source: &str, debug: bool) {
     let data = &event.data;
     let len  = effective_len(data);
     if len < 5 { return; }
@@ -608,6 +612,17 @@ fn handle_response(event: &HttpEvent, source: &str, debug: bool) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+
+    let client = create_client();
+    let result: u8 = client
+        .query("SELECT 1")
+        .fetch_one()
+        .await?;
+
+    init_db(&client).await.expect("TODO: panic message");
+
+    println!("Connected: {}", result);
+
     let opt = Opt::parse();
     env_logger::init();
 
@@ -724,13 +739,13 @@ async fn main() -> Result<(), anyhow::Error> {
 
                 while let Some(item) = rb.next() {
                     let data = &*item;
-                    if data.len() < mem::size_of::<HttpEvent>() { continue; }
+                    if data.len() < mem::size_of::<Event>() { continue; }
 
                     let event = unsafe {
-                        std::ptr::read_unaligned(data.as_ptr() as *const HttpEvent)
+                        std::ptr::read_unaligned(data.as_ptr() as *const Event)
                     };
 
-                    let source = if event.dport == 443 || event.sport == 443 {
+                    let source = if event.des_port == 443 || event.src_port == 443 {
                         "HTTPS"
                     } else {
                         "HTTP"
@@ -801,13 +816,13 @@ async fn main() -> Result<(), anyhow::Error> {
 
                 while let Some(item) = rb.next() {
                     let data = &*item;
-                    if data.len() < mem::size_of::<HttpEvent>() { continue; }
+                    if data.len() < mem::size_of::<Event>() { continue; }
 
                     let event = unsafe {
-                        std::ptr::read_unaligned(data.as_ptr() as *const HttpEvent)
+                        std::ptr::read_unaligned(data.as_ptr() as *const Event)
                     };
 
-                    let source = if event.sport == 443 || event.dport == 443 {
+                    let source = if event.src_port == 443 || event.des_port == 443 {
                         "HTTPS"
                     } else {
                         "HTTP"

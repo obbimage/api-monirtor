@@ -36,12 +36,12 @@ impl TryFrom<u8> for HttpMethod {
 }
 
 #[repr(C)]
-pub struct HttpEvent {
+pub struct Event {
     pub method: u8,
-    pub saddr: u32,
-    pub daddr: u32,
-    pub sport: u16,
-    pub dport: u16,
+    pub src_addr: u32,
+    pub des_ddr: u32,
+    pub src_port: u16,
+    pub des_port: u16,
     pub is_request: u8,
     pub _pad: [u8; 3],   //  // 1 = request, 0 = response
     pub data: [u8; 496], // 496 + 12 bytes header = 508 < 512
